@@ -1,3 +1,4 @@
+use crate::constant::{self, *};
 use colored::*;
 
 pub fn handle_command(
@@ -8,46 +9,50 @@ pub fn handle_command(
     match command.as_str() {
         "add" | "a" => {
             if options.is_empty() {
-                return Err("The command for add is 'todo add <todo>'");
+                return Err(ADD_ERROR_MESSAGE);
             }
             add_todo(options.join(" "), todos);
         }
         "edit" | "e" => {
             if options.is_empty() {
-                return Err("The command for edit is 'todo edit <index> <new_todo>'");
+                return Err(EDIT_ERROR_MESSAGE);
             }
             let idx = parse_index(&options, todos)?;
             edit_todo(idx, options[1..].join(" "), todos);
         }
         "delete" | "d" => {
             if options.is_empty() || options.len() > 1 {
-                return Err("The command for delete is 'todo delete <index>'");
+                return Err(DELETE_ERROR_MESSAGE);
             }
             let idx = parse_index(&options, todos)?;
             delete_todo(idx, todos);
         }
         "list" | "l" => {
             if !options.is_empty() {
-                return Err("The command for list is 'todo list'");
+                return Err(LIST_ERROR_MESSAGE);
             }
             list_todo(todos);
         }
         "toggle" | "t" => {
             if options.is_empty() || options.len() > 1 {
-                return Err("The command for toggle is 'todo toggle <index>'");
+                return Err(TOGGLE_ERROR_MESSAGE);
             }
             let idx = parse_index(&options, todos)?;
             toggle_todo(idx, todos);
         }
-        _ => return Err("Invalid command!"),
+        "help" | "h" => {
+            if !options.is_empty() {
+                return Err(HELP_ERROR_MESSAGE);
+            }
+            display_help();
+        }
+        _ => return Err(ERROR_MESSAGE),
     }
     Ok(())
 }
 
 fn parse_index(options: &Vec<String>, todos: &Vec<Todo>) -> Result<usize, &'static str> {
-    let idx = options[0]
-        .parse::<usize>()
-        .map_err(|_| "Index out of bounds!")?;
+    let idx = options[0].parse::<usize>().map_err(|_| "Invalid index!")?;
     if idx <= 0 || idx > todos.len() {
         return Err("Index out of bounds!");
     }
@@ -126,4 +131,10 @@ fn toggle_todo(idx: usize, todos: &mut Vec<Todo>) {
         );
     }
     todos[idx - 1].is_done = !todos[idx - 1].is_done;
+}
+
+fn display_help() {
+    for e in ERROR_LIST {
+        println!("{}", e);
+    }
 }

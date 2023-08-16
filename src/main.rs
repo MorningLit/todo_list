@@ -1,8 +1,7 @@
 use colored::Colorize;
 use todo_list::check_args;
 use todo_list::command;
-
-const ERROR_MESSAGE: &str = "The usage is 'todo <command> [options]'";
+use todo_list::constant::INPUT_ERROR_MESSAGE;
 
 fn main() {
     println!("Welcome to your todo list!");
@@ -11,7 +10,7 @@ fn main() {
         let (command, options) = match check_args() {
             Ok((command, options)) => (command, options),
             Err(_) => {
-                eprintln!("{ERROR_MESSAGE}");
+                eprintln!("{}", INPUT_ERROR_MESSAGE.bright_red());
                 continue;
             }
         };
