@@ -98,12 +98,12 @@ impl Todo {
 }
 
 fn add_todo(todo: String, todos: &mut Vec<Todo>, conn: &Connection) -> Result<(), rusqlite::Error> {
-    let id = conn.last_insert_rowid() + 1;
     conn.execute(
-        "INSERT into todo (id, todo, is_done) VALUES (?1, ?2, ?3)",
-        params![&id, &todo, false],
+        "INSERT into todo (todo, is_done) VALUES (?1, ?2)",
+        params![&todo, false],
     )?;
     println!("{}{}{}", "Todo '".blue(), todo.blue(), "' added!".blue());
+    let id = conn.last_insert_rowid();
     todos.push(Todo::new(id, todo));
     Ok(())
 }
