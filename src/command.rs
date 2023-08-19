@@ -1,31 +1,41 @@
-use crate::constant::{self, *};
+use std::process;
+
+use crate::constant::*;
 use colored::*;
+use rusqlite::{params, Connection};
 
 pub fn handle_command(
     command: String,
     options: Vec<String>,
     todos: &mut Vec<Todo>,
+    conn: &Connection,
 ) -> Result<(), &'static str> {
     match command.as_str() {
         "add" | "a" => {
             if options.is_empty() {
                 return Err(ADD_ERROR_MESSAGE);
             }
-            add_todo(options.join(" "), todos);
+            if let Err(_) = add_todo(options.join(" "), todos, conn) {
+                return Err(ADD_DB_ERROR_MESSAGE);
+            }
         }
         "edit" | "e" => {
             if options.is_empty() {
                 return Err(EDIT_ERROR_MESSAGE);
             }
             let idx = parse_index(&options, todos)?;
-            edit_todo(idx, options[1..].join(" "), todos);
+            if let Err(_) = edit_todo(idx, options[1..].join(" "), todos, conn) {
+                return Err(EDIT_DB_ERROR_MESSAGE);
+            }
         }
         "delete" | "d" => {
             if options.is_empty() || options.len() > 1 {
                 return Err(DELETE_ERROR_MESSAGE);
             }
             let idx = parse_index(&options, todos)?;
-            delete_todo(idx, todos);
+            if let Err(_) = delete_todo(idx, todos, conn) {
+                return Err(DELETE_DB_ERROR_MESSAGE);
+            }
         }
         "list" | "l" => {
             if !options.is_empty() {
@@ -38,13 +48,22 @@ pub fn handle_command(
                 return Err(TOGGLE_ERROR_MESSAGE);
             }
             let idx = parse_index(&options, todos)?;
-            toggle_todo(idx, todos);
+            if let Err(_) = toggle_todo(idx, todos, conn) {
+                return Err(EDIT_DB_ERROR_MESSAGE);
+            }
         }
         "help" | "h" => {
             if !options.is_empty() {
                 return Err(HELP_ERROR_MESSAGE);
             }
             display_help();
+        }
+        "exit" | "x" => {
+            if !options.is_empty() {
+                return Err(EXIT_ERROR_MESSAGE);
+            }
+            println!("Exiting program...");
+            process::exit(0)
         }
         _ => return Err(ERROR_MESSAGE),
     }
@@ -60,25 +79,46 @@ fn parse_index(options: &Vec<String>, todos: &Vec<Todo>) -> Result<usize, &'stat
 }
 
 pub struct Todo {
+    id: i64,
     todo: String,
     is_done: bool,
 }
 
 impl Todo {
-    pub fn new(todo: String) -> Todo {
+    pub fn new(id: i64, todo: String) -> Todo {
         Todo {
+            id,
             todo,
             is_done: false,
         }
     }
+    pub fn initialise(id: i64, todo: String, is_done: bool) -> Todo {
+        Todo { id, todo, is_done }
+    }
 }
 
-fn add_todo(todo: String, todos: &mut Vec<Todo>) {
+fn add_todo(todo: String, todos: &mut Vec<Todo>, conn: &Connection) -> Result<(), rusqlite::Error> {
+    let id = conn.last_insert_rowid() + 1;
+    conn.execute(
+        "INSERT into todo (id, todo, is_done) VALUES (?1, ?2, ?3)",
+        params![&id, &todo, false],
+    )?;
     println!("{}{}{}", "Todo '".blue(), todo.blue(), "' added!".blue());
-    todos.push(Todo::new(todo));
+    todos.push(Todo::new(id, todo));
+    Ok(())
 }
 
-fn edit_todo(idx: usize, new_todo: String, todos: &mut Vec<Todo>) {
+fn edit_todo(
+    idx: usize,
+    new_todo: String,
+    todos: &mut Vec<Todo>,
+    conn: &Connection,
+) -> Result<(), rusqlite::Error> {
+    let id = todos[idx - 1].id;
+    conn.execute(
+        "UPDATE todo SET todo = $1 WHERE id = $2",
+        params![&new_todo, &id],
+    )?;
     println!(
         "{}{}{}{}{}",
         "Todo '".blue(),
@@ -87,10 +127,17 @@ fn edit_todo(idx: usize, new_todo: String, todos: &mut Vec<Todo>) {
         new_todo.blue(),
         "'!".blue()
     );
-    todos[idx - 1] = Todo::new(new_todo);
+    todos[idx - 1] = Todo::initialise(todos[idx - 1].id, new_todo, todos[idx - 1].is_done);
+    Ok(())
 }
 
-fn delete_todo(idx: usize, todos: &mut Vec<Todo>) {
+fn delete_todo(
+    idx: usize,
+    todos: &mut Vec<Todo>,
+    conn: &Connection,
+) -> Result<(), rusqlite::Error> {
+    let id = todos[idx - 1].id;
+    conn.execute("DELETE from todo WHERE id = $1", params![&id])?;
     println!(
         "{}{}{}",
         "Todo '".blue(),
@@ -98,6 +145,7 @@ fn delete_todo(idx: usize, todos: &mut Vec<Todo>) {
         "' deleted!".blue()
     );
     todos.remove(idx - 1);
+    Ok(())
 }
 
 fn list_todo(todos: &Vec<Todo>) {
@@ -114,8 +162,18 @@ fn list_todo(todos: &Vec<Todo>) {
     }
 }
 
-fn toggle_todo(idx: usize, todos: &mut Vec<Todo>) {
-    if todos[idx - 1].is_done == false {
+fn toggle_todo(
+    idx: usize,
+    todos: &mut Vec<Todo>,
+    conn: &Connection,
+) -> Result<(), rusqlite::Error> {
+    let id = todos[idx - 1].id;
+    let updated_is_done = !todos[idx - 1].is_done;
+    conn.execute(
+        "UPDATE todo SET is_done = $1 WHERE id = $2",
+        params![&updated_is_done, &id],
+    )?;
+    if updated_is_done {
         println!(
             "{}{}{}",
             "Todo '".green(),
@@ -131,6 +189,7 @@ fn toggle_todo(idx: usize, todos: &mut Vec<Todo>) {
         );
     }
     todos[idx - 1].is_done = !todos[idx - 1].is_done;
+    Ok(())
 }
 
 fn display_help() {
